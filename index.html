@@ -1,1 +1,119 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Minecraft Server Wiki</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+
+  <!-- Discord OAuth handled via Cloudflare Worker -->
+
+  <style>
+    body { margin:0; font-family:Arial; background:#0f172a; color:#e5e7eb; display:flex; min-height:100vh }
+    aside { width:260px; background:#020617; padding:20px }
+    aside a { display:block; color:#94a3b8; padding:6px 0; cursor:pointer; text-decoration:none }
+    aside a:hover { color:#38bdf8 }
+    main { flex:1; padding:32px }
+    header { display:flex; justify-content:space-between; align-items:center }
+    button { padding:8px 14px; background:#5865F2; color:white; border:none; border-radius:6px; cursor:pointer; font-weight:bold }
+    button.logout { background:#ef4444 }
+    textarea { width:100%; min-height:220px; background:#020617; color:#e5e7eb; border:1px solid #1e293b; padding:12px; border-radius:6px }
+    .editor { margin-top:30px; display:none }
+    .audit { margin-top:40px; font-size:13px; color:#94a3b8 }
+    .badge { background:#334155; padding:4px 8px; border-radius:6px; font-size:12px }
+  </style>
+</head>
+<body>
+<aside>
+  <h3>Wiki Pages</h3>
+  <a onclick="loadPage('home')">Home</a>
+  <a onclick="loadPage('rules')">Rules</a>
+  <a onclick="loadPage('features')">Features</a>
+  <a onclick="loadPage('ranks')">Ranks</a>
+  <a onclick="loadPage('commands')">Commands</a>
+</aside>
+
+<main>
+<header>
+  <h1 id="page-title">Home</h1>
+  <div>
+    <span id="userBadge" class="badge">Viewer</span>
+    <button id="loginBtn" onclick="login()">Login with Discord</button>
+    <button id="logoutBtn" class="logout" onclick="logout()" style="display:none">Logout</button>
+  </div>
+</header>
+
+<div id="page-content"></div>
+
+<div class="editor" id="editorBox">
+  <h3>Staff Editor</h3>
+  <textarea id="editor"></textarea><br>
+  <button onclick="savePage()">Save & Commit</button>
+</div>
+
+<div class="audit" id="auditLog"></div>
+</main>
+
+<script>
+// =====================================
+// 🧠 GITHUB + DISCORD AUTH MODEL
+// =====================================
+// Pages are stored as markdown files in GitHub
+// Editing commits directly to the repo
+// Auth handled by Cloudflare Worker (OAuth)
+
+const API_BASE = "https://YOUR-WORKER.yourname.workers.dev";
+
+let currentPage = 'home';
+let user = null;
+
+function render(md) {
+  return md.replace(/^# (.*$)/gim, '<h2>$1</h2>').replace(/\n/g,'<br>');
+}
+
+async function login() {
+  window.location.href = API_BASE + '/login';
+}
+
+async function logout() {
+  await fetch(API_BASE + '/logout', { credentials:'include' });
+  location.reload();
+}
+
+async function loadUser() {
+  const res = await fetch(API_BASE + '/me', { credentials:'include' });
+  if (!res.ok) return;
+  user = await res.json();
+  document.getElementById('userBadge').innerText = user.role;
+  document.getElementById('loginBtn').style.display = 'none';
+  document.getElementById('logoutBtn').style.display = 'inline-block';
+  if (user.role !== 'viewer') document.getElementById('editorBox').style.display = 'block';
+}
+
+async function loadPage(page) {
+  currentPage = page;
+  const res = await fetch(`pages/${page}.md`);
+  const text = await res.text();
+  document.getElementById('page-title').innerText = page;
+  document.getElementById('page-content').innerHTML = render(text);
+  document.getElementById('editor').value = text;
+}
+
+async function savePage() {
+  if (!user || user.role === 'viewer') return alert('Not authorized');
+  const content = document.getElementById('editor').value;
+  await fetch(API_BASE + '/commit', {
+    method: 'POST',
+    credentials:'include',
+    headers:{ 'Content-Type':'application/json' },
+    body: JSON.stringify({ page: currentPage, content })
+  });
+  alert('Saved to GitHub');
+  loadPage(currentPage);
+}
+
+loadUser();
+loadPage('home');
+</script>
+</body>
+</html>
 
